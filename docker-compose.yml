@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  php:
+    build:
+      context: ./docker/php
+    container_name: yii2-php
+    environment:
+      - TZ=${TZ}
+    ports:
+      - "${APP_PORT}:8080"
+    volumes:
+      - ./src:/var/www/html
+    working_dir: /var/www/html
+    command: bash -lc "mkdir -p web && php -S 0.0.0.0:8080 -t web"
+    depends_on:
+      - db
+    networks: [appnet]
+
+  db:
+    image: mysql:8.0
+    container_name: yii2-mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      - TZ=${TZ}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks: [appnet]
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: yii2-phpmyadmin
+    environment:
+      - PMA_HOST=db
+      - PMA_USER=${MYSQL_USER}
+      - PMA_PASSWORD=${MYSQL_PASSWORD}
+      - TZ=${TZ}
+    ports:
+      - "8081:80"
+    depends_on:
+      - db
+    networks: [appnet]
+
+networks:
+  appnet:
+
+volumes:
+  dbdata:
