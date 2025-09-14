@@ -13,15 +13,21 @@ $config = [
     ],
     'components' => [
         'request' => [
-            // !!! insert a secret key in the following (if it is empty) - this is required by cookie validation
             'cookieValidationKey' => 'KOKVqVKTFlLnH9omDOFfyHhTeneUF24G',
+            'parsers' => [
+                'application/json' => yii\web\JsonParser::class, // Cái này để bật truyền JSON cho request body
+            ],
         ],
         'cache' => [
             'class' => 'yii\caching\FileCache',
         ],
         'user' => [
-            'identityClass' => 'app\models\User',
+            'identityClass' => app\models\User::class,
             'enableAutoLogin' => true,
+            'loginUrl' => ['auth/login'], // Router tới khi k session
+        ],
+        'session' => [
+            'class' => yii\web\Session::class,
         ],
         'errorHandler' => [
             'errorAction' => 'site/error',
@@ -29,7 +35,6 @@ $config = [
         'mailer' => [
             'class' => \yii\symfonymailer\Mailer::class,
             'viewPath' => '@app/mail',
-            // send all mails to a file by default.
             'useFileTransport' => true,
         ],
         'log' => [
@@ -42,32 +47,41 @@ $config = [
             ],
         ],
         'db' => $db,
-        /*
-        'urlManager' => [
+        'urlManager' => [ // Chú ý đoạn này cần cấu hình khi thêm API
+            'class' => yii\web\UrlManager::class,
             'enablePrettyUrl' => true,
             'showScriptName' => false,
             'rules' => [
+                // render
+                'admin/users'                   => 'user-web/index',
+                'admin/users/create'            => 'user-web/create',
+                'admin/users/<id:\d+>'          => 'user-web/view',
+                'admin/users/<id:\d+>/update'   => 'user-web/update',
+                'admin/users/<id:\d+>/delete'   => 'user-web/delete',
+                // rest
+                [
+                    'class' => yii\rest\UrlRule::class,
+                    'controller' => ['user'],
+                    'pluralize' => true,
+                    'tokens' => [
+                        '{id}' => '<id:\\d+>',
+                    ],
+                ],
             ],
         ],
-        */
     ],
     'params' => $params,
 ];
 
 if (YII_ENV_DEV) {
-    // configuration adjustments for 'dev' environment
     $config['bootstrap'][] = 'debug';
     $config['modules']['debug'] = [
         'class' => 'yii\debug\Module',
-        // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
     ];
 
     $config['bootstrap'][] = 'gii';
     $config['modules']['gii'] = [
         'class' => 'yii\gii\Module',
-        // uncomment the following to add your IP if you are not connecting from localhost.
-        //'allowedIPs' => ['127.0.0.1', '::1'],
     ];
 }
 

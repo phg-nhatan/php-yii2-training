@@ -2,103 +2,137 @@
 
 namespace app\models;
 
-class User extends \yii\base\BaseObject implements \yii\web\IdentityInterface
+use Yii;
+use yii\db\ActiveRecord;
+use yii\web\IdentityInterface;
+use yii\behaviors\TimestampBehavior;
+
+class User extends ActiveRecord implements IdentityInterface
 {
-    public $id;
-    public $username;
-    public $password;
-    public $authKey;
-    public $accessToken;
-
-    private static $users = [
-        '100' => [
-            'id' => '100',
-            'username' => 'admin',
-            'password' => 'admin',
-            'authKey' => 'test100key',
-            'accessToken' => '100-token',
-        ],
-        '101' => [
-            'id' => '101',
-            'username' => 'demo',
-            'password' => 'demo',
-            'authKey' => 'test101key',
-            'accessToken' => '101-token',
-        ],
-    ];
-
-
-    /**
-     * {@inheritdoc}
-     */
-    public static function findIdentity($id)
-    {
-        return isset(self::$users[$id]) ? new static(self::$users[$id]) : null;
+    public $password; // virtual field để nhận plaintext khi create/update
+    
+    // Tham chiếu đến bảng user trong db
+    public static function tableName() 
+    { 
+        return '{{%user}}';
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public static function findIdentityByAccessToken($token, $type = null)
+    // Tự fill cho created_at và updated_at
+    public function behaviors()
     {
-        foreach (self::$users as $user) {
-            if ($user['accessToken'] === $token) {
-                return new static($user);
-            }
+        return [
+            TimestampBehavior::class,
+        ];
+    }
+
+    public function rules()
+    {
+        return [
+            // Create: tất cả bắt buộc trừ auth_key
+            [['username', 'email', 'password', 'role', 'status'], 'required', 'on' => 'create'],
+            // Update: tất cả bắt buộc trừ auth_key, password
+            [['username', 'email', 'role', 'status'], 'required', 'on' => 'update'],
+
+            // username
+            ['username', 'trim'],
+            ['username', 'string', 'max' => 255],
+            ['username', 'unique', 'message' => 'Username already exists'],
+
+            // password_hash
+            ['password', 'string', 'min' => 5, 'max' => 20,
+                'tooShort' => 'Password must be at least 5 characters',
+                'tooLong' => 'Password cannot exceed 20 characters'],
+
+            // email
+            ['email', 'trim'],
+            ['email', 'string', 'max' => 255],
+            ['email', 'email', 'message' => 'Email format is invalid'],
+            ['email', 'unique', 'message' => 'Email already exists'],
+
+            // auth_key
+            ['auth_key', 'string', 'max' => 32],
+
+            // role
+            ['role', 'in', 'range' => ['admin', 'user'], 
+                'message' => 'Role must be either admin or user'],
+
+            // status
+            ['status', 'in', 'range' => [0, 1],
+                'message' => 'Status must be either 0 or 1'],
+            ['status', 'integer'],
+        ];
+    }
+
+    // Đăng kí scenarios cho action create và update
+    public function scenarios()
+    {
+        $scenarios = parent::scenarios();
+        $scenarios['create'] = ['username','email','role','status','password'];
+        $scenarios['update'] = ['username','email','role','status','password'];
+        return $scenarios;
+    }
+
+    // Ẩn các field trước khi trả ra dữ liệu
+    public function fields()
+    {
+        $fields = parent::fields();
+        unset($fields['password_hash'], $fields['auth_key']);
+        return $fields;
+    }
+
+    // Thao tác thực hiện trước khi lưu xuống db
+    public function beforeSave($insert)
+    {
+        if (!parent::beforeSave($insert)) return false;
+
+        if ($this->password !== null && $this->password !== '') {
+            $this->password_hash = Yii::$app->security->generatePasswordHash($this->password);
         }
 
-        return null;
+        if ($insert && empty($this->auth_key)) {
+            $this->auth_key = Yii::$app->security->generateRandomString();
+        }
+
+        return true;
     }
 
-    /**
-     * Finds user by username
-     *
-     * @param string $username
-     * @return static|null
-     */
+    public function validatePassword($password)
+    {
+        return Yii::$app->security->validatePassword($password, $this->password_hash);
+    }
+
     public static function findByUsername($username)
     {
-        foreach (self::$users as $user) {
-            if (strcasecmp($user['username'], $username) === 0) {
-                return new static($user);
-            }
+        Yii::debug(['username' => $username], __METHOD__);
+        $user = static::findOne(['username' => $username, 'status' => 1]);
+        if ($user === null) {
+            Yii::warning("User not found or inactive: {$username}", __METHOD__);
         }
+        return $user;
+    }
 
+    public static function findIdentity($id)
+    {
+        return static::findOne(['id' => $id, 'status' => 1]);
+    }
+
+    public static function findIdentityByAccessToken($token, $type = null)
+    {
         return null;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getId()
     {
         return $this->id;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getAuthKey()
     {
-        return $this->authKey;
+        return $this->auth_key;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function validateAuthKey($authKey)
     {
-        return $this->authKey === $authKey;
-    }
-
-    /**
-     * Validates password
-     *
-     * @param string $password password to validate
-     * @return bool if password provided is valid for current user
-     */
-    public function validatePassword($password)
-    {
-        return $this->password === $password;
+        return $this->auth_key === $authKey;
     }
 }

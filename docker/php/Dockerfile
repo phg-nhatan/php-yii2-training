@@ -7,7 +7,6 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql intl mbstring zip gd \
     && rm -rf /var/lib/apt/lists/*
 
-# Composer 2 (yêu cầu PHP >= 7.2.5 — ok với 7.4)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
